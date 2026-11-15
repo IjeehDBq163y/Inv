@@ -1,16 +1,22 @@
 -- // ULTIMATE PURE INVISIBILITY + ANTI-ESP BOX HIDER
--- Hides Body, Tools, Shadows, Names, AND Forces Full Transparency Override
+-- Universal FE Script - Works in most Roblox Games
 
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
 
 -- // 1. CONFIGURATION
 local SETTINGS = {
 	TransparencyValue = 1, -- 1 = Fully Invisible
+	HideHealthBar = true,
+	HideNamePlate = true,
+	HideTools = true,
+	HideAccessories = true
 }
 
 local Character = nil
-local Humanoid = nil
+local CurrentTool = nil
 
 -- // 2. CORE INVISIBILITY FUNCTION
 local function SetInvisibility(Char)
@@ -18,22 +24,20 @@ local function SetInvisibility(Char)
 	
 	local Hum = Char:FindFirstChildOfClass("Humanoid")
 	
-	-- Hide Nameplate & Health Bar
+	-- Hide Nameplate & Health Bar via Humanoid settings
 	if Hum then
 		Hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+		Hum.HealthDisplayEnabled = false -- Some games respect this
 	end
 	
 	-- Make ALL parts of your character transparent
 	for _, Descendant in ipairs(Char:GetDescendants()) do
 		if Descendant:IsA("BasePart") then
-			-- Standard Transparency
 			Descendant.Transparency = SETTINGS.TransparencyValue
-			
-			-- Force Local Transparency Modifier (Bypasses some textures)
 			Descendant.LocalTransparencyModifier = SETTINGS.TransparencyValue
 			
-			-- Ensure Tools inside the character are also hidden
-			if Descendant.Parent and Descendant.Parent:IsA("Tool") then
+			-- Force specific shadow parts
+			if Descendant.Name == "Shadow" or Descendant.Name == "HeadShadow" then
 				Descendant.Transparency = SETTINGS.TransparencyValue
 				Descendant.LocalTransparencyModifier = SETTINGS.TransparencyValue
 			end
@@ -52,16 +56,15 @@ local function SetInvisibility(Char)
 		if Descendant:IsA("BillboardGui") then
 			Descendant.Enabled = false
 		end
+		
+		-- Hide TextButtons/Frame elements inside GUIs just in case
+		if Descendant:IsA("TextLabel") or Descendant:IsA("TextButton") then
+			Descendant.Visible = false
+		end
 	end
 	
-	-- // SHADOW HIDING LOGIC
-	local ShadowParts = {
-		"Shadow",
-		"HeadsShadow",
-		"HeadShadow",
-		"ShadowPart"
-	}
-	
+	-- // SHADOW HIDING LOGIC (Redundant safety net)
+	local ShadowParts = {"Shadow", "HeadsShadow", "HeadShadow", "ShadowPart"}
 	for _, Name in ipairs(ShadowParts) do
 		local FoundShadow = Char:FindFirstChild(Name)
 		if FoundShadow and FoundShadow:IsA("BasePart") then
@@ -74,9 +77,12 @@ end
 -- Helper function to apply invisibility when character loads
 local function OnCharacterLoad(Char)
 	Character = Char
-	Humanoid = Char:WaitForChild("Humanoid")
 	
-	SetInvisibility(Char)
+	-- Wait for Humanoid to exist
+	local Hum = Char:WaitForChild("Humanoid", 5)
+	if Hum then
+		SetInvisibility(Char)
+	end
 	
 	-- Apply to new items added (Tools/Accessories) while in character
 	Char.ChildAdded:Connect(function(Child)
@@ -91,6 +97,7 @@ local function OnCharacterLoad(Char)
 				handle.LocalTransparencyModifier = SETTINGS.TransparencyValue
 			end
 		elseif Child:IsA("Tool") then
+			CurrentTool = Child
 			for _, part in ipairs(Child:GetDescendants()) do
 				if part:IsA("BasePart") then
 					part.Transparency = SETTINGS.TransparencyValue
@@ -114,61 +121,55 @@ local function OnCharacterLoad(Char)
 			Descendant.Transparency = SETTINGS.TransparencyValue
 			Descendant.LocalTransparencyModifier = SETTINGS.TransparencyValue
 		end
+		if Descendant:IsA("ImageLabel") or Descendant:IsA("TextLabel") then
+			Descendant.Visible = false
+		end
 	end)
 end
 
--- // 3. TOOL EQUIP/UNEQUIP HANDLING
-local function SetupToolHandling()
-	local Backpack = LocalPlayer:FindFirstChild("Backpack") or LocalPlayer:FindFirstChildOfClass("Backpack")
-	
-	if Backpack then
-		Backpack.ChildAdded:Connect(function(Tool)
-			if Tool:IsA("Tool") then
-				if Tool.Handle then
-					Tool.Handle.Transparency = SETTINGS.TransparencyValue
-					Tool.Handle.LocalTransparencyModifier = SETTINGS.TransparencyValue
-				end
-				for _, part in ipairs(Tool:GetDescendants()) do
-					if part:IsA("BasePart") then
-						part.Transparency = SETTINGS.TransparencyValue
-						part.LocalTransparencyModifier = SETTINGS.TransparencyValue
-					end
-					if part:IsA("BillboardGui") then
-						part.Enabled = false
-					end
-				end
+-- // 3. TOOL EQUIP/UNEQUIP HANDLERS
+LocalPlayer.CharacterAdded:Connect(OnCharacterLoad)
+
+-- Handle Tool Equipping
+LocalPlayer.PlayerScripts:WaitForChild("PlayerModule"):GetModule("ToolModule").Equipped:Connect(function(tool)
+	if tool and SETTINGS.HideTools then
+		for _, part in ipairs(tool:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.Transparency = SETTINGS.TransparencyValue
+				part.LocalTransparencyModifier = SETTINGS.TransparencyValue
 			end
-		end)
+			if part:IsA("BillboardGui") then
+				part.Enabled = false
+			end
+		end
+	end
+end)
+
+LocalPlayer.PlayerScripts:WaitForChild("PlayerModule"):GetModule("ToolModule").Unequipped:Connect(function()
+	-- Reset transparency if needed, though usually invisibility handles it
+	-- If you want them to reappear when unequipped, uncomment below:
+	-- if Character and Character.Parent then
+	--    for _, part in ipairs(Character:GetDescendants()) do
+	--        if part:IsA("BasePart") then part.Transparency = 0; part.LocalTransparencyModifier = 0 end
+	--    end
+	-- end
+end)
+
+-- // 4. LOOP FOR DYNAMIC UPDATES (Anti-Kick/Anti-Cheat Bypass)
+-- Sometimes games reset transparency. This loop forces it every second.
+while task.wait(1) do
+	if Character and Character.Parent then
+		SetInvisibility(Character)
 		
-		for _, Tool in ipairs(Backpack:GetChildren()) do
-			if Tool:IsA("Tool") then
-				if Tool.Handle then
-					Tool.Handle.Transparency = SETTINGS.TransparencyValue
-					Tool.Handle.LocalTransparencyModifier = SETTINGS.TransparencyValue
-				end
-				for _, part in ipairs(Tool:GetDescendants()) do
-					if part:IsA("BasePart") then
-						part.Transparency = SETTINGS.TransparencyValue
-						part.LocalTransparencyModifier = SETTINGS.TransparencyValue
-					end
-					if part:IsA("BillboardGui") then
-						part.Enabled = false
-					end
+		-- Check for current tool
+		local equippedTool = LocalPlayer.Backpack:FindFirstChildOfClass("Tool") or LocalPlayer.Character:FindFirstChildOfClass("Tool")
+		if equippedTool and SETTINGS.HideTools then
+			for _, part in ipairs(equippedTool:GetDescendants()) do
+				if part:IsA("BasePart") then
+					part.Transparency = SETTINGS.TransparencyValue
+					part.LocalTransparencyModifier = SETTINGS.TransparencyValue
 				end
 			end
 		end
 	end
 end
-
--- Initialize for current character
-if LocalPlayer.Character then
-	OnCharacterLoad(LocalPlayer.Character)
-end
-
--- Listen for respawns/joins
-LocalPlayer.CharacterAdded:Connect(OnCharacterLoad)
-
--- Setup tool handling immediately
-SetupToolHandling()
-
-print("Ultimate Pure Invis Loaded. No Name, No Shadow, No Parts.")
