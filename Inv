@@ -1,5 +1,5 @@
 -- Persistent Invisible Script with Hit/Touch Capability
--- No toggle, auto-respawn safe, hides shadow/name/body.
+-- No toggle, auto-respawn safe, hides shadow/name/body/accessories/healthbar.
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -11,64 +11,101 @@ local HIDE_NAME_TAG = true
 local KEEP_HITTING = true -- Ensures you can still hit people
 
 local function ApplyInvisibility(Character)
-    if not Character then return end
-    
-    local Head = Character:FindFirstChild("Head")
-    
-    -- 1. Hide Name Tag
-    if HIDE_NAME_TAG and Head then
-        local BillboardGui = Head:FindFirstChildOfClass("BillboardGui")
-        if BillboardGui then
-            BillboardGui.Enabled = false
-        end
-    end
-    
-    -- 2. Hide Body Parts & Accessories
-    for _, Part in ipairs(Character:GetDescendants()) do
-        if Part:IsA("BasePart") then
-            -- Set transparency to 1 (invisible)
-            Part.Transparency = 1
-            
-            -- CRITICAL FOR HITTING: 
-            -- We keep CanCollide TRUE so you can still touch/hit others.
-            -- If you want to pass through walls too, change this to false.
-            Part.CanCollide = true 
-            
-            -- Reset color to white so no weird textures show through
-            Part.Color = Color3.fromRGB(255, 255, 255)
-            
-        elseif Part:IsA("Decal") or Part:IsA("Texture") then
-            Part.Transparency = 1
-            
-        elseif Part:IsA("ShadowObject") then
-            if HIDE_SHADOWS then
-                Part.Enabled = false
-            end
-        end
-    end
-    
-    -- 3. Handle Tools/Weapons in hand
-    for _, Tool in ipairs(Character:GetChildren()) do
-        if Tool:IsA("Tool") then
-            local Handle = Tool:FindFirstChild("Handle")
-            if Handle then
-                Handle.Transparency = 1
-                Handle.CanCollide = true -- Ensure tool can still hit
-            end
-        end
-    end
+	if not Character then return end
+	
+	-- 1. Hide Name Tag & HealthBar
+	local Head = Character:FindFirstChild("Head")
+	if Head then
+		-- Hide Name Tag
+		if HIDE_NAME_TAG then
+			local BillboardGui = Head:FindFirstChildOfClass("BillboardGui")
+			if BillboardGui then
+				BillboardGui.Enabled = false
+			end
+		end
+		
+		-- Hide Default HealthBar
+		local HealthGui = Head:FindFirstChild("HealthGui")
+		if HealthGui then
+			HealthGui.Enabled = false
+		end
+	end
+	
+	-- 2. Hide Body Parts & Accessories
+	for _, Part in ipairs(Character:GetDescendants()) do
+		if Part:IsA("BasePart") then
+			-- Set transparency to 1 (invisible)
+			Part.Transparency = 1
+			
+			-- CRITICAL FOR HITTING: 
+			-- We keep CanCollide TRUE so you can still touch/hit others.
+			Part.CanCollide = true 
+			
+			-- Reset color to white so no weird textures show through
+			Part.Color = Color3.fromRGB(255, 255, 255)
+			
+		elseif Part:IsA("Decal") or Part:IsA("Texture") then
+			Part.Transparency = 1
+			
+		elseif Part:IsA("Accessory") then
+			-- Hide accessories (hats, helmets, etc.)
+			local Handle = Part:FindFirstChild("Handle")
+			if Handle and Handle:IsA("BasePart") then
+				Handle.Transparency = 1
+				Handle.CanCollide = true
+				Handle.Color = Color3.fromRGB(255, 255, 255)
+			end
+			
+		elseif Part:IsA("ShadowObject") then
+			if HIDE_SHADOWS then
+				Part.Enabled = false
+			end
+		end
+	end
+	
+	-- 3. Handle Tools/Weapons in hand
+	for _, Tool in ipairs(Character:GetChildren()) do
+		if Tool:IsA("Tool") then
+			local Handle = Tool:FindFirstChild("Handle")
+			if Handle then
+				Handle.Transparency = 1
+				Handle.CanCollide = true -- Ensure tool can still hit
+			end
+		end
+	end
 end
 
 -- Function to handle Respawn
 local function OnCharacterAdded(Char)
-    -- Small delay to ensure parts are fully loaded
-    task.wait(0.5)
-    ApplyInvisibility(Char)
+	-- Apply immediately on spawn
+	ApplyInvisibility(Char)
+	
+	-- Connect to DescendantAdded to catch any late-loading parts (like accessories)
+	Char.DescendantAdded:Connect(function(Part)
+		if Part:IsA("BasePart") then
+			Part.Transparency = 1
+			Part.CanCollide = true
+			Part.Color = Color3.fromRGB(255, 255, 255)
+		elseif Part:IsA("Decal") or Part:IsA("Texture") then
+			Part.Transparency = 1
+		elseif Part:IsA("Accessory") then
+			local Handle = Part:FindFirstChild("Handle")
+			if Handle and Handle:IsA("BasePart") then
+				Handle.Transparency = 1
+				Handle.CanCollide = true
+				Handle.Color = Color3.fromRGB(255, 255, 255)
+			end
+		elseif Part:IsA("ShadowObject") then
+			if HIDE_SHADOWS then
+				Part.Enabled = false
+			end
+		end
+	end)
 end
 
 -- Initial Application
 if LocalPlayer.Character then
-    ApplyInvisibility(LocalPlayer.Character)
+	ApplyInvisibility(LocalPlayer.Character)
 end
 
 LocalPlayer.CharacterAdded:Connect(OnCharacterAdded)
